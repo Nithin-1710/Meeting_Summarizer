@@ -1,6 +1,7 @@
 # backend/services.py
 from io import BytesIO
-from . import config
+from .db_config import client  # Corrected import
+import json
 
 
 def transcribe_audio(file: BytesIO) -> str:
@@ -8,7 +9,7 @@ def transcribe_audio(file: BytesIO) -> str:
     file.seek(0)  # ensure pointer at start
     print(f"DEBUG: Sending file {file.name}, size={len(file.getbuffer())} bytes")
     
-    transcript = config.client.audio.transcriptions.create(
+    transcript = client.audio.transcriptions.create(
         model="whisper-1",
         file=file
     )
@@ -31,9 +32,7 @@ def transcribe_audio(file: BytesIO) -> str:
 
 
 def generate_summary(transcript: str) -> str:
-    """Summarize transcript and extract action items.
-    Returns plain text on success; raises Exception on failure.
-    """
+    """Summarize transcript and extract action items."""
     prompt = f"""
     Summarize the following meeting transcript into:
     1. Key decisions
@@ -43,7 +42,7 @@ def generate_summary(transcript: str) -> str:
     Transcript:
     {transcript}
     """
-    response = config.client.chat.completions.create(
+    response = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[{"role": "user", "content": prompt}]
     )
@@ -52,44 +51,43 @@ def generate_summary(transcript: str) -> str:
         raise RuntimeError("Empty summary returned.")
     return content
 
-def extract_deadlines_with_gpt(meeting_transcript, client):
+
+def extract_deadlines_with_gpt(meeting_transcript):
     """
-    Use GPT to extract deadlines from meeting transcript
-    Returns list of dictionaries with deadline info
+    Use GPT to extract deadlines from meeting transcript.
+    Returns list of dictionaries with deadline info.
     """
-    import json
-    
-    extraction_prompt = """
+    extraction_prompt = f"""
     Analyze the following meeting transcript and extract all deadlines, tasks with due dates, 
     and important dates mentioned. 
-    
+
     Return ONLY a valid JSON array, nothing else. No markdown, no extra text.
-    
+
     For each deadline found, provide:
     1. Task/Deadline title
-    2. Due date (in YYYY-MM-DD format if possible, or natural language if exact date unclear)
+    2. Due date (YYYY-MM-DD if possible, or natural language)
     3. Brief description/context
-    
+
     Example format:
     [
-        {
+        {{
             "title": "Submit project proposal",
             "date": "2025-01-20",
             "description": "Project proposal for client meeting"
-        },
-        {
+        }},
+        {{
             "title": "Code review",
             "date": "2025-01-15",
             "description": "Review PR #123"
-        }
+        }}
     ]
-    
+
     If no deadlines are found, return: []
-    
+
     Meeting Transcript:
-    {transcript}
+    {meeting_transcript}
     """
-    
+
     try:
         response = client.chat.completions.create(
             model="gpt-4",
@@ -100,53 +98,33 @@ def extract_deadlines_with_gpt(meeting_transcript, client):
                 },
                 {
                     "role": "user",
-                    "content": f"""
-        Analyze the following meeting transcript and extract all deadlines, tasks with due dates, 
-        and important dates mentioned. 
-    
-        Return ONLY a valid JSON array, nothing else. No markdown, no extra text.
-    
-        For each deadline found, provide:
-        1. Task/Deadline title
-        2. Due date (in YYYY-MM-DD format if possible, or natural language if exact date unclear)
-        3. Brief description/context
-    
-        Example format:
-        [
-            {{"title": "Submit project proposal", "date": "2025-01-20", "description": "Project proposal for client meeting"}},
-            {{"title": "Code review", "date": "2025-01-15", "description": "Review PR #123"}}
-        ]
-    
-        If no deadlines are found, return: []
-    
-        Meeting Transcript:
-        {meeting_transcript}
-        """
+                    "content": extraction_prompt
                 }
             ],
             temperature=0.3,
         )
-    
+
         # Parse the JSON response
         response_text = response.choices[0].message.content.strip()
-    
+
         # Debug: print the raw response
         print(f"DEBUG: Raw GPT response: {response_text}")
-    
-        # Try to extract JSON if it's wrapped in markdown code blocks
+
+        # Remove code block markers if present
         if response_text.startswith("```json"):
-            response_text = response_text[7:]  # Remove ```json
+            response_text = response_text[7:]
         if response_text.startswith("```"):
-            response_text = response_text[3:]  # Remove ```
+            response_text = response_text[3:]
         if response_text.endswith("```"):
-            response_text = response_text[:-3]  # Remove trailing ```
-    
+            response_text = response_text[:-3]
+
         response_text = response_text.strip()
         
         deadlines = json.loads(response_text)
         print(f"DEBUG: Successfully parsed deadlines: {deadlines}")
         
         return deadlines
+
     except json.JSONDecodeError as e:
         print(f"Failed to parse GPT response as JSON: {e}")
         print(f"Response was: {response_text}")
