@@ -1,4 +1,4 @@
-# Meeting Summariser 📝🤖
+# Meeting Summariser
 
 **Meeting Summariser** is a Python-based AI tool that automates meeting documentation. It transcribes meeting audio, generates AI summaries, extracts actionable deadlines, and optionally integrates with Google Calendar.  
 
@@ -34,13 +34,13 @@
 
 ## **Screenshots**  
 
-*(Optional: show the functionality without overwhelming detail)*  
+![Project Screenshot](images/Screenshot 2025-10-15 224647.png) 
 
-### Transcript & Summary
-![Transcript Screenshot](transcript.png)  
+### Meeting History
+![Project Screenshot](images/Screenshot 2025-10-15 224716.png)  
 
-### Deadlines Added
-![Deadlines Screenshot](deadlines.png)  
+### Statistics
+![Project Screenshot](images/Screenshot 2025-10-15 224738.png)  
 
 ---
 
